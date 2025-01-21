@@ -58,10 +58,15 @@ export const initSettings = async () => {
 
 function initOpenAI() {
   Settings.llm = new OpenAI({
-    model: process.env.MODEL ?? "gpt-4o-mini",
-    maxTokens: process.env.LLM_MAX_TOKENS
-      ? Number(process.env.LLM_MAX_TOKENS)
-      : undefined,
+    model: process.env.MODEL ?? "gpt-4o",
+    temperature: process.env.LLM_TEMPERATURE
+      ? Number(process.env.LLM_TEMPERATURE)
+      : 0.7,
+    additionalChatOptions: {
+      max_completion_tokens: 8192,  // Match the maxTokens setting
+      presence_penalty: 0.3,  // Encourage more complete responses
+      frequency_penalty: 0.3,  // Encourage more varied language
+    },
   });
   Settings.embedModel = new OpenAIEmbedding({
     model: process.env.EMBEDDING_MODEL,

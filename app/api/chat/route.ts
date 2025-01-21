@@ -23,8 +23,9 @@ export async function POST(request: NextRequest) {
   const vercelStreamData = new StreamData();
 
   try {
-    const body = await request.json();
-    const { messages, data }: { messages: Message[]; data?: any } = body;
+    // Parse request body once and validate
+    const body: { messages: Message[]; data?: unknown } = await request.json();
+    const { messages, data } = body;
     if (!isValidMessages(messages)) {
       return NextResponse.json(
         {
@@ -67,14 +68,39 @@ export async function POST(request: NextRequest) {
             });
           }
         })
+        .catch((error) => {
+          console.error("Error generating suggestions:", error);
+        })
         .finally(() => {
           vercelStreamData.close();
         });
     };
 
-    return LlamaIndexAdapter.toDataStreamResponse(response, {
+    // Use LlamaIndex adapter for streaming response with proper buffering
+    const streamingResponse = await LlamaIndexAdapter.toDataStreamResponse(response, {
       data: vercelStreamData,
-      callbacks: { onCompletion },
+      callbacks: { 
+        onCompletion,
+        onStart: () => {
+          vercelStreamData.append("\n"); // Ensure clean start
+        },
+        onToken: (token) => {
+          // Ensure proper token handling
+          if (token.trim()) {
+            vercelStreamData.append(token);
+          }
+        },
+      }
+    });
+
+    // Return the streaming response with proper headers
+    return new Response(streamingResponse.body, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'Transfer-Encoding': 'chunked'
+      },
     });
   } catch (error) {
     console.error("[LlamaIndex]", error);
