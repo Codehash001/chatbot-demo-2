@@ -7,6 +7,7 @@ import { useChat } from "ai/react";
 import CustomChatInput from "./ui/chat/chat-input";
 import CustomChatMessages from "./ui/chat/chat-messages";
 import { useClientConfig } from "./ui/chat/hooks/use-config";
+import React from 'react';
 
 export default function ChatSection() {
   const { backend } = useClientConfig();
@@ -23,16 +24,21 @@ export default function ChatSection() {
       alert(errorMessage);
     },
   });
+
+  // Memoize the children to prevent unnecessary re-renders
+  const chatMessages = React.useMemo(() => <CustomChatMessages />, []);
+  const chatInput = React.useMemo(() => <CustomChatInput />, []);
+
   return (
     <ChatSectionUI 
       handler={handler} 
       className="h-full w-full flex flex-col bg-white border rounded-lg shadow-sm"
     >
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        <CustomChatMessages />
+        {chatMessages}
       </div>
       <div className="w-full border-t bg-white px-4 py-4">
-        <CustomChatInput />
+        {chatInput}
       </div>
     </ChatSectionUI>
   );

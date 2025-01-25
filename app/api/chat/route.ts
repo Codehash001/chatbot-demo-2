@@ -59,21 +59,7 @@ export async function POST(request: NextRequest) {
 
     const onCompletion = (content: string) => {
       chatHistory.push({ role: "assistant", content: content });
-      generateNextQuestions(chatHistory)
-        .then((questions: string[]) => {
-          if (questions.length > 0) {
-            vercelStreamData.appendMessageAnnotation({
-              type: "suggested_questions",
-              data: questions,
-            });
-          }
-        })
-        .catch((error) => {
-          console.error("Error generating suggestions:", error);
-        })
-        .finally(() => {
-          vercelStreamData.close();
-        });
+      vercelStreamData.close();
     };
 
     // Use LlamaIndex adapter for streaming response with proper buffering
