@@ -48,46 +48,75 @@ export async function POST(request: NextRequest) {
     const callbackManager = createCallbackManager(vercelStreamData);
     const chatHistory: ChatMessage[] = messages.slice(0, -1) as ChatMessage[];
 
-    // Calling LlamaIndex's ChatEngine to get a streamed response
-    const response = await Settings.withCallbackManager(callbackManager, () => {
-      return chatEngine.chat({
-        message: userMessageContent,
-        chatHistory,
-        stream: true,
+    // Create an AbortController for timeout
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      abortController.abort('Request timed out after 60 seconds');
+    }, 60000);
+
+    try {
+      // Calling LlamaIndex's ChatEngine to get a streamed response
+      const response = await Settings.withCallbackManager(callbackManager, () => {
+        return chatEngine.chat({
+          message: userMessageContent,
+          chatHistory,
+          stream: true,
+        });
       });
-    });
 
-    const onCompletion = (content: string) => {
-      chatHistory.push({ role: "assistant", content: content });
-      vercelStreamData.close();
-    };
+      const onCompletion = (content: string) => {
+        try {
+          chatHistory.push({ role: "assistant", content: content });
+        } finally {
+          clearTimeout(timeoutId);
+          vercelStreamData.close();
+        }
+      };
 
-    // Use LlamaIndex adapter for streaming response with proper buffering
-    const streamingResponse = await LlamaIndexAdapter.toDataStreamResponse(response, {
-      data: vercelStreamData,
-      callbacks: { 
-        onCompletion,
-        onStart: () => {
-          vercelStreamData.append("\n"); // Ensure clean start
-        },
-        onToken: (token) => {
-          // Ensure proper token handling
-          if (token.trim()) {
-            vercelStreamData.append(token);
-          }
-        },
+      // Use LlamaIndex adapter for streaming response with proper buffering
+      const streamingResponse = await LlamaIndexAdapter.toDataStreamResponse(response, {
+        data: vercelStreamData,
+        callbacks: { 
+          onCompletion,
+          onStart: () => {
+            vercelStreamData.append("\n"); // Ensure clean start
+          },
+          onToken: (token) => {
+            try {
+              // Ensure proper token handling
+              if (token.trim()) {
+                vercelStreamData.append(token);
+              }
+            } catch (e) {
+              console.error('Token handling error:', e);
+              throw e;
+            }
+          },
+        }
+      });
+
+      try {
+        // Return the streaming response with proper headers for Vercel
+        return new Response(streamingResponse.body, {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache, no-transform',
+            'Connection': 'keep-alive',
+            'Transfer-Encoding': 'chunked',
+            'X-Content-Type-Options': 'nosniff',
+            'X-Accel-Buffering': 'no'
+          },
+        });
+      } catch (error) {
+        console.error('Streaming error:', error);
+        clearTimeout(timeoutId);
+        vercelStreamData.close();
+        throw error;
       }
-    });
-
-    // Return the streaming response with proper headers
-    return new Response(streamingResponse.body, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache, no-transform',
-        'Connection': 'keep-alive',
-        'Transfer-Encoding': 'chunked'
-      },
-    });
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
   } catch (error) {
     console.error("[LlamaIndex]", error);
     return NextResponse.json(
