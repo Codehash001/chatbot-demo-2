@@ -29,22 +29,23 @@ async function createZipBackup(sourceDir: string, outputPath: string): Promise<s
 
   return new Promise((resolve, reject) => {
     let zip;
-    
+
     if (isWindows) {
-      zip = spawn('powershell', [
-        '-command',
+      zip = spawn("powershell", [
+        "-command",
         `Compress-Archive -Path "${sourceDir}/*" -DestinationPath "${outputPath}" -Force`
       ]);
     } else {
-      zip = spawn('zip', ['-r', outputPath, '.', '-x', '*.gitkeep'], { cwd: sourceDir });
+      // Use full path to zip and correct arguments
+      zip = spawn("/usr/bin/zip", ["-r", outputPath, "."], { cwd: sourceDir });
     }
 
-    let errorOutput = '';
-    zip.stderr.on('data', (data) => {
+    let errorOutput = "";
+    zip.stderr.on("data", (data) => {
       errorOutput += data.toString();
     });
 
-    zip.on('close', (code) => {
+    zip.on("close", (code) => {
       if (code === 0) {
         resolve(outputPath);
       } else {
@@ -52,7 +53,7 @@ async function createZipBackup(sourceDir: string, outputPath: string): Promise<s
       }
     });
 
-    zip.on('error', (err) => {
+    zip.on("error", (err) => {
       reject(new Error(`Failed to start zip process: ${err.message}`));
     });
   });
