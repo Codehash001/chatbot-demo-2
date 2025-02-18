@@ -3,33 +3,34 @@ import { writeFile, unlink, readdir, mkdir } from "fs/promises";
 import { join } from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { createWriteStream, createReadStream } from "fs";
+import { createWriteStream, createReadStream, existsSync } from "fs";
 import archiver from "archiver";
-import { spawn } from "child_process";
-import os from "os";
 
 const execAsync = promisify(exec);
 
+// 🧹 Cleans up the 'data' folder but keeps .gitkeep
 async function cleanupDataFolder(dataDir: string) {
   try {
+    if (!existsSync(dataDir)) return;
     const files = await readdir(dataDir);
     for (const file of files) {
-      if (file !== '.gitkeep') {
+      if (file !== ".gitkeep") {
         await unlink(join(dataDir, file));
       }
     }
   } catch (error) {
-    console.error('Error cleaning up data folder:', error);
+    console.error("Error cleaning up data folder:", error);
   }
 }
 
-async function createZipBackup(sourceDir: string, outputPath: string): Promise<string> {
+// 🎒 Creates a ZIP backup of the .cache folder
+async function createZipBackup(outputPath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const output = createWriteStream(outputPath);
     const archive = archiver("zip", { zlib: { level: 9 } });
 
     output.on("close", () => {
-      console.log(`Backup created: ${archive.pointer()} total bytes`);
+      console.log(`✅ Backup created: ${archive.pointer()} total bytes`);
       resolve(outputPath);
     });
 
@@ -38,7 +39,15 @@ async function createZipBackup(sourceDir: string, outputPath: string): Promise<s
     });
 
     archive.pipe(output);
-    archive.directory(sourceDir, false); // Add the entire directory to the zip
+
+    // Ensure .cache directory exists before zipping
+    const cacheDir = join(process.cwd(), ".cache");
+    if (!existsSync(cacheDir)) {
+      console.warn("⚠️ .cache folder is missing, creating it...");
+      mkdir(cacheDir, { recursive: true });
+    }
+
+    archive.directory(cacheDir, false); // ✅ Zips all contents inside .cache
     archive.finalize();
   });
 }
@@ -48,18 +57,13 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const files = formData.getAll("files") as File[];
 
-    // Create data directory if it doesn't exist
+    // 🗂 Ensure data and .cache directories exist
     const dataDir = join(process.cwd(), "data");
     const cacheDir = join(process.cwd(), ".cache");
-    
-    try {
-      await writeFile(join(dataDir, ".gitkeep"), "");
-    } catch (error) {
-      console.error("Error creating data directory:", error);
-      throw new Error("Failed to create data directory");
-    }
+    if (!existsSync(dataDir)) await mkdir(dataDir, { recursive: true });
+    if (!existsSync(cacheDir)) await mkdir(cacheDir, { recursive: true });
 
-    // Save all files
+    // 💾 Save all uploaded files
     try {
       for (const file of files) {
         const bytes = await file.arrayBuffer();
@@ -71,7 +75,7 @@ export async function POST(req: NextRequest) {
       throw new Error("Failed to save uploaded files");
     }
 
-    // Run the generate command
+    // ⚙️ Run the generate command
     try {
       const { stdout, stderr } = await execAsync("npm run generate", {
         cwd: process.cwd(),
@@ -89,51 +93,53 @@ export async function POST(req: NextRequest) {
       throw new Error(error instanceof Error ? error.message : "Failed to run generate command");
     }
 
-    // Create backup zip
+    // 🗜 Create backup zip
     let backupUrl = null;
     try {
       const backupPath = join(process.cwd(), "public", "backup.zip");
-      await createZipBackup(cacheDir, backupPath);
+      await createZipBackup(backupPath);
       backupUrl = "/backup.zip";
     } catch (error) {
       console.error("Error creating backup:", error);
-      // Don't throw here, we'll still return success for the ingestion
     }
 
-    // Cleanup data folder
+    // 🧹 Cleanup data folder after processing
     await cleanupDataFolder(dataDir);
 
     return NextResponse.json({
       message: "Documents processed successfully",
       backupUrl,
-      success: true
+      success: true,
     });
   } catch (error) {
     console.error("Error processing documents:", error);
-    // Ensure cleanup happens even on error
-    const dataDir = join(process.cwd(), "data");
-    await cleanupDataFolder(dataDir);
+    await cleanupDataFolder(join(process.cwd(), "data"));
 
     return NextResponse.json(
-      { 
+      {
         error: error instanceof Error ? error.message : "Unknown error occurred",
-        success: false
+        success: false,
       },
       { status: 500 }
     );
   }
 }
 
+// 📥 Serves the backup zip file
 export async function GET(req: NextRequest) {
   const backupPath = join(process.cwd(), "public", "backup.zip");
-  
+
   try {
+    if (!existsSync(backupPath)) {
+      throw new Error("Backup file does not exist.");
+    }
+
     const stream = createReadStream(backupPath);
     const response = new Response(stream as unknown as ReadableStream);
-    
-    response.headers.set('Content-Type', 'application/zip');
-    response.headers.set('Content-Disposition', 'attachment; filename=backup.zip');
-    
+
+    response.headers.set("Content-Type", "application/zip");
+    response.headers.set("Content-Disposition", "attachment; filename=backup.zip");
+
     return response;
   } catch (error) {
     console.error("Error streaming backup file:", error);
