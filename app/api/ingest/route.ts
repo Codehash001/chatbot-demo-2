@@ -4,8 +4,7 @@ import { join } from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { createWriteStream, createReadStream } from "fs";
-import { Stream } from "stream";
-import { pipeline } from "stream/promises";
+import archiver from "archiver";
 import { spawn } from "child_process";
 import os from "os";
 
@@ -25,37 +24,22 @@ async function cleanupDataFolder(dataDir: string) {
 }
 
 async function createZipBackup(sourceDir: string, outputPath: string): Promise<string> {
-  const isWindows = os.platform() === "win32";
-
   return new Promise((resolve, reject) => {
-    let zip;
+    const output = createWriteStream(outputPath);
+    const archive = archiver("zip", { zlib: { level: 9 } });
 
-    if (isWindows) {
-      zip = spawn("powershell", [
-        "-command",
-        `Compress-Archive -Path "${sourceDir}/*" -DestinationPath "${outputPath}" -Force`
-      ]);
-    } else {
-      // Use full path to zip and correct arguments
-      zip = spawn("/usr/bin/zip", ["-r", outputPath, "."], { cwd: sourceDir });
-    }
-
-    let errorOutput = "";
-    zip.stderr.on("data", (data) => {
-      errorOutput += data.toString();
+    output.on("close", () => {
+      console.log(`Backup created: ${archive.pointer()} total bytes`);
+      resolve(outputPath);
     });
 
-    zip.on("close", (code) => {
-      if (code === 0) {
-        resolve(outputPath);
-      } else {
-        reject(new Error(`Zip creation failed: ${errorOutput}`));
-      }
+    archive.on("error", (err) => {
+      reject(new Error(`Zip creation failed: ${err.message}`));
     });
 
-    zip.on("error", (err) => {
-      reject(new Error(`Failed to start zip process: ${err.message}`));
-    });
+    archive.pipe(output);
+    archive.directory(sourceDir, false); // Add the entire directory to the zip
+    archive.finalize();
   });
 }
 
