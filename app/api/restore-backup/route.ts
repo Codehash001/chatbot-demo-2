@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { writeFile, rm } from 'fs/promises';
+import { writeFile, rm, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import AdmZip from 'adm-zip';
@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const file = formData.get('backup') as File;
-    
+
     if (!file) {
       return NextResponse.json(
         { error: 'No backup file provided' },
@@ -23,25 +23,28 @@ export async function POST(request: Request) {
     await writeFile(tempPath, buffer);
 
     try {
-      // Verify the zip contains .cache folder
+      // Load the zip file
       const zip = new AdmZip(tempPath);
       const zipEntries = zip.getEntries();
-      const hasCacheFolder = zipEntries.some(entry => 
-        entry.entryName.startsWith('.cache/') || entry.entryName === '.cache'
-      );
 
-      if (!hasCacheFolder) {
-        throw new Error('Invalid backup: No .cache folder found in the zip file');
+      // Check if the zip contains JSON files
+      const jsonFiles = zipEntries.filter(entry => entry.entryName.endsWith('.json'));
+
+      if (jsonFiles.length === 0) {
+        throw new Error('Invalid backup: No JSON files found in the zip file');
       }
 
-      // Remove existing .cache folder if it exists
+      // Ensure .cache folder exists
       const cacheDir = path.join(process.cwd(), '.cache');
-      if (existsSync(cacheDir)) {
-        await rm(cacheDir, { recursive: true });
+      if (!existsSync(cacheDir)) {
+        await mkdir(cacheDir, { recursive: true });
       }
 
-      // Extract the backup
-      zip.extractAllTo(process.cwd(), true);
+      // Extract JSON files into .cache folder
+      for (const entry of jsonFiles) {
+        const outputPath = path.join(cacheDir, entry.entryName);
+        await writeFile(outputPath, entry.getData());
+      }
 
       return NextResponse.json({ success: true });
     } finally {
