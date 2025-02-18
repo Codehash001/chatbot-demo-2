@@ -3,7 +3,7 @@ import { useClientConfig } from "../hooks/use-config";
 
 const preprocessContent = (content: string) => {
   // Remove `sandbox:` from the beginning of the URL before rendering markdown
-  let processedContent = content.replace(/(sandbox|attachment|snt):/g, "");
+  const processedContent = content.replace(/(sandbox|attachment|snt):/g, "");
   return processedContent;
 };
 
@@ -24,3 +24,4 @@ export function Markdown({
     </div>
   );
 }
+
