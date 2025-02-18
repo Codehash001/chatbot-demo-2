@@ -7,6 +7,7 @@ import { createWriteStream, createReadStream } from "fs";
 import { Stream } from "stream";
 import { pipeline } from "stream/promises";
 import { spawn } from "child_process";
+import os from "os";
 
 const execAsync = promisify(exec);
 
@@ -24,19 +25,19 @@ async function cleanupDataFolder(dataDir: string) {
 }
 
 async function createZipBackup(sourceDir: string, outputPath: string): Promise<string> {
-  // Ensure the public directory exists
-  const publicDir = join(process.cwd(), "public");
-  try {
-    await mkdir(publicDir, { recursive: true });
-  } catch (error) {
-    // Directory might already exist, ignore error
-  }
+  const isWindows = os.platform() === "win32";
 
   return new Promise((resolve, reject) => {
-    const zip = spawn('powershell', [
-      '-command',
-      `Compress-Archive -Path "${sourceDir}/*" -DestinationPath "${outputPath}" -Force`
-    ]);
+    let zip;
+    
+    if (isWindows) {
+      zip = spawn('powershell', [
+        '-command',
+        `Compress-Archive -Path "${sourceDir}/*" -DestinationPath "${outputPath}" -Force`
+      ]);
+    } else {
+      zip = spawn('zip', ['-r', outputPath, '.', '-x', '*.gitkeep'], { cwd: sourceDir });
+    }
 
     let errorOutput = '';
     zip.stderr.on('data', (data) => {
