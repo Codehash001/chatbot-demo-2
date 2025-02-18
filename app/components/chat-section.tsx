@@ -7,6 +7,7 @@ import { useChat } from "ai/react";
 import CustomChatInput from "./ui/chat/chat-input";
 import CustomChatMessages from "./ui/chat/chat-messages";
 import { useClientConfig } from "./ui/chat/hooks/use-config";
+import { ThemeToggle } from "./theme-toggle";
 import React from 'react';
 
 export default function ChatSection() {
@@ -32,12 +33,16 @@ export default function ChatSection() {
   return (
     <ChatSectionUI 
       handler={handler} 
-      className="h-full w-full flex flex-col bg-white border rounded-lg shadow-sm"
+      className="h-full w-full flex flex-col shadow-sm"
     >
+      <div className="flex items-center justify-between p-4 border-b sm:p-4">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">RAG Chatbot</h1>
+        <ThemeToggle />
+      </div>
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         {chatMessages}
       </div>
-      <div className="w-full border-t bg-white px-4 py-4">
+      <div className="w-full border-t px-3 py-3 sm:px-4 sm:py-4">
         {chatInput}
       </div>
     </ChatSectionUI>

@@ -116,7 +116,7 @@ function getFileContent(file: DocumentFile): string {
     }
   } else {
     console.warn(
-      "Warning: FILESERVER_URL_PREFIX not set in environment variables. Can't use file server",
+      "Warning:  not set in environment variables. Can't use file server",
     );
   }
   defaultContent += urlContent;

@@ -1,0 +1,14 @@
+/* Override default LlamaIndex chat UI styles */
+.dark .llamaindex-chat-input,
+.dark .llamaindex-chat-input-form,
+.dark .llamaindex-chat-input-field {
+  background-color: transparent !important;
+}
+
+.dark .llamaindex-chat-input-field {
+  color: white !important;
+}
+
+.dark .llamaindex-chat-input-field::placeholder {
+  color: #9ca3af !important;
+}
